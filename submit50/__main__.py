@@ -16,6 +16,8 @@ import termcolor
 
 from importlib.resources import files
 from packaging import version
+from datetime import datetime
+from pytz import timezone
 from . import __version__, CONFIG_LOADER
 
 # Internationalization
@@ -137,7 +139,7 @@ def prompt(honesty, included, excluded):
         # Show default message
         if honesty == True:
             honesty_question = _(
-                "Keeping in mind the course's policy on academic honesty, "
+                "Keeping in mind the course's policy on academic honesty, including its restrictions on AI use, "
                 "are you sure you want to submit these files (yes/no)? "
             )
         # If a custom message is configured, show that instead
@@ -160,6 +162,26 @@ def prompt(honesty, included, excluded):
 
     # Otherwise, do continue
     return True
+
+
+def check_slug_year(slug):
+    """Warn if the slug is for previous year's CS50x course."""
+
+    # extract the year from the slug
+    try:
+        year = re.search(r"cs50/problems/(\d{4})/x", slug)
+        if year and int(year.group(1)) < int(datetime.now(timezone("US/Eastern")).year):
+            suggested_slug = re.sub(r"cs50/problems/\d{4}/x", f"cs50/problems/{datetime.now(timezone('US/Eastern')).year}/x", slug)
+            cprint(_("You are submitting to a previous year's CS50x course. Your submission will not be counted towards this year's course."), "yellow")
+            cprint(_("If you are looking to submit to this year's course, please use the following slug:"), "yellow")
+            cprint(suggested_slug, "yellow")
+
+            # Ask if they want to continue
+            if not re.match(f"^\s*(?:{_('y|yes')})\s*$", input(_("Do you want to continue with this submission (yes/no)? ")), re.I):
+                raise Error(_("User aborted submission."))
+            
+    except ValueError:
+        pass
 
 
 def excepthook(type, value, tb):
@@ -223,7 +245,8 @@ def main():
 
     check_announcements()
     check_version()
-
+    check_slug_year(args.slug)
+    
     user_name, commit_hash, message = lib50.push("submit50", args.slug, CONFIG_LOADER, prompt=prompt)
     print(message)
 
